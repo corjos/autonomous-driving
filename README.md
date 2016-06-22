@@ -3,5 +3,8 @@ Code for use in my autonomous driving research. Consists of largely-independent 
 making heavy use of the numpy/scipy stack.
 
 # Packages
-* hgmm
+* ##hgmm:
     A package implementing Frank Havlak's hybrid gaussian mixture model algorithm.
+* ##collision:
+    A package implementing Jason Hardy's fast collision probabilty algorithm between 
+    two convex polygonal objects, one of which has an uncertain position.
