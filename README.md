@@ -8,15 +8,15 @@ If you have any questions about or problems with the code please contact me jwc2
 * **hgmm**: 
 
     A package implementing Frank Havlak's hybrid gaussian mixture model algorithm.
-    
-    Havlak, Frank, and Mark Campbell. "Discrete and continuous, probabilistic anticipation for autonomous robots in urban environments." IEEE Transactions on Robotics 30.2 (2014): 461-474.
+
+    *Havlak, Frank, and Mark Campbell. "Discrete and continuous, probabilistic anticipation for autonomous robots in urban environments." IEEE Transactions on Robotics 30.2 (2014): 461-474.*
 
 * **collision**:
 
     A package implementing Jason Hardy's fast collision probabilty algorithm between 
     two convex polygonal objects, one of which has an uncertain position.
 
-    Hardy, Jason, and Mark Campbell. "Contingency planning over probabilistic obstacle predictions for autonomous road vehicles." IEEE Transactions on Robotics 29.4 (2013): 913-929.
+    *Hardy, Jason, and Mark Campbell. "Contingency planning over probabilistic obstacle predictions for autonomous road vehicles." IEEE Transactions on Robotics 29.4 (2013): 913-929.*
 
 * **myplot**:
 
