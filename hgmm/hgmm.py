@@ -13,9 +13,6 @@ from __future__ import division
 import numpy as np
 import scipy.linalg as la
 import gaussian_splitting
-from matplotlib import pyplot as plt
-from myplot.covariance_ellipse import plot_cov_ellipse
-
 
 
 def get_sigma_points(mu, cov):
@@ -57,7 +54,9 @@ def get_sigma_points(mu, cov):
     
     assert np.allclose(weights.sum(), 1.0)
     
+    # expensive check, comment out if required
     assert compare_sigma_pts(mu, cov, pts, weights)
+    
     return pts, weights
         
 def get_sigma_points_mean_cov(pts, weights):
@@ -76,6 +75,8 @@ def get_sigma_points_mean_cov(pts, weights):
     mean = np.sum(pts*weights, axis=1)[:,np.newaxis]
     cov = np.dot(weights*(pts-mean), (pts-mean).T)
     
+    # Sometimes if kappa < 0, cov may become non positive semi-definite. If so, 
+    # approximate 'covariance' matrix according to UKF paper Julier 1997
     try: # check positive semi-definiteness
         la.cholesky(cov)
     except la.LinAlgError:
@@ -90,11 +91,11 @@ def get_sigma_points_mean_cov(pts, weights):
 
 def compare_sigma_pts(mu, cov, pts, weights):
     ''' return true if the generated pts have a mean and cov that matches the input 
-    to get_sigma_points'''
+    to get_sigma_points (hint: it always should)'''
     mu = mu.flatten()
     mu_check, cov_check = get_sigma_points_mean_cov(pts, weights)
-    try:        #assert np.allclose(mu, mu_check.flatten()), 'mu values are fucked'
-        assert np.allclose(cov, cov_check), 'cov values are fucked'
+    try:        
+        assert np.allclose(cov, cov_check), 'cov values are shite'
     except:
         print 'mu check:', mu_check.flatten()
         print 'mu', mu
@@ -102,24 +103,6 @@ def compare_sigma_pts(mu, cov, pts, weights):
         print cov_check
         assert False, 'covariance is bung'
     return True
-    
-    
-def f(x, v=np.array([[0]]), k=0):
-    ''' Nonlinear discrete-time dynamics function'''
-    r = 10 - k/49
-    vel = np.pi*r/200 + v*np.ones_like(x[0,:])
-    dt = 1
-    
-    x = np.reshape(x, (3,-1))
-    x_new = np.zeros_like(x)
-
-    for j in range(x_new.shape[1]):
-        x_new[0,j] = x[0,j] + r * (np.sin(x[2,j] + vel[0,j]*dt/r) - np.sin(x[2,j]))
-        x_new[1,j] = x[1,j] + r * (np.cos(x[2,j] + vel[0,j]*dt/r) - np.cos(x[2,j]))
-        x_new[2,j] = x[2,j] + vel[0,j]*dt/r
-
-    return x_new
-
 
 
 def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
@@ -200,22 +183,72 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
     mixture.reduce_N(max_mixands)
         
         
-if __name__ == "__main__":
+def f(x, v=np.array([[0]]), k=0):
+    ''' Generic nonlinear discrete-time dynamics function for testing purposes'''
+    r = 10 - k/49
+    vel = np.pi*r/200 + v*np.ones_like(x[0,:])
+    dt = 1
     
+    x = np.reshape(x, (3,-1))
+    x_new = np.zeros_like(x)
 
+    for j in range(x_new.shape[1]):
+        x_new[0,j] = x[0,j] + r * (np.sin(x[2,j] + vel[0,j]*dt/r) - np.sin(x[2,j]))
+        x_new[1,j] = x[1,j] + r * (np.cos(x[2,j] + vel[0,j]*dt/r) - np.cos(x[2,j]))
+        x_new[2,j] = x[2,j] + vel[0,j]*dt/r
+
+    return x_new
+        
+        
+        
+        
+        
+if __name__ == "__main__":
+    ''' Run simple test case '''    
     
     
-    mu = np.zeros(3)
-    cov = np.array([[3e-3, 2e-3, 0],
-                    [2e-3, 3e-3, 0],
-                    [0,    0,    1e-5]])
+    import gmm
+    import matplotlib.pyplot as plt
     
-    mu = np.zeros(2)
-    cov = np.array([[3e-3, 2e-3],
-                    [2e-3, 3e-3]])
-    calc_result = get_sigma_points_mean_cov(*get_sigma_points(mu, cov))
-    print 'mu:', mu
-    print calc_result[0].flatten()
-    print 'cov:', calc_result[1]
-    assert np.allclose(mu, calc_result[0].flatten())
-    assert np.allclose(cov, calc_result[1])
+    plt.close('all')
+    
+    n = 3 # number of states
+    
+    mu = np.zeros((n,1), dtype=np.float64) # initial mixand mean
+    
+    P = np.eye(n)*0.005 # covariance matrix
+    P[1,1] = 1e-3
+    P[2,2] = 1e-3
+    
+    # rotate cov matrix to make it more interesting
+    R = gaussian_splitting.get_rot_mat_from_vects(
+                   np.array([[1,0,0]]).T, np.array([[1,1,0]]).T  )
+    P = np.dot(R, np.dot(P, R.T))
+
+    cov_v = np.array([[1e-3]], dtype=np.float64)  # noise covariance matrix
+               
+               
+    #mixands = [gmm.Mixand(1/3, mu, P),gmm.Mixand(1/3, mu+0.1, P),gmm.Mixand(1/3, mu-0.1, P)]
+    mixands = [gmm.Mixand(1, mu, P)]
+               
+    mixture = gmm.GaussianMixture(mixands)
+    print mixture
+    
+    
+    plt.figure()
+    mixture.plot()
+    plt.xlim(-11,11)
+    plt.ylim(-21,1)
+    plt.pause(0.1)
+
+    # precompute optimal gaussian splits    
+    gaussian_splitting.precompute(N=3, cov_reduction=0.3, n=n)
+    
+    for k in range(150):
+        print '\n timestep:', k
+        print 'N =', mixture.N   
+        
+        propagate(mixture, f, k, cov_v, e_res_max=7e-15, max_mixands=10)
+
+        mixture.plot(nsteps=200)
+        plt.pause(0.01)
