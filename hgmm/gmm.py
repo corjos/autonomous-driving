@@ -69,10 +69,18 @@ class GaussianMixture:
             ret += 'w: {}, mu: {}, P {}\n'.format(m.w, m.mu, m.P)
         return ret
         
-    def plot_ellipse(self):
+    def copy(self):
+        ''' Return a shallow copy of the mixture'''
+        return GaussianMixture(self.mixands.copy())
+        
+    def plot_ellipse(self, **kwargs):
         ''' plot first two dimensions of the mixture'''
+        ellipses = []
         for m in self.mixands:
-            cvre.plot_cov_ellipse(m.P[:2,:2], m.mu[:2], alpha=m.w)
+            p = cvre.plot_cov_ellipse(m.P[:2,:2], m.mu[:2], alpha=m.w, **kwargs)
+            ellipses.append(p)
+        return ellipses
+        
             
     def plot_heatmap(self, nstd=10, nsteps=200, cmap=cm.gray_r):
         ''' plot first two dimensions of the mixture'''
@@ -80,9 +88,9 @@ class GaussianMixture:
         for m in self.mixands:
             # find image extents
             xmin = min(xmin, m.mu.flatten()[0] - nstd*np.sqrt(np.diag(m.P)[0]))
-            xmax = max(xmin, m.mu.flatten()[0] + nstd*np.sqrt(np.diag(m.P)[0]))
+            xmax = max(xmax, m.mu.flatten()[0] + nstd*np.sqrt(np.diag(m.P)[0]))
             ymin = min(ymin, m.mu.flatten()[1] - nstd*np.sqrt(np.diag(m.P)[1]))
-            ymax = max(ymin, m.mu.flatten()[1] + nstd*np.sqrt(np.diag(m.P)[1]))
+            ymax = max(ymax, m.mu.flatten()[1] + nstd*np.sqrt(np.diag(m.P)[1]))
 
         Z = 0
         lim = (xmin, xmax, ymin, ymax)

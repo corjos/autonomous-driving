@@ -56,6 +56,10 @@ def get_rot_mat_from_vects (x, y):
     ''' Find an n-dimensional rotation matrix between two n-length vectors x and y '''
     assert max(y.shape) == max(x.shape)
     n = max(x.shape)
+
+    if np.allclose(x, y):
+        return np.eye(n)
+        
     x = np.reshape(x, (n,1)) #/ np.linalg.norm(x)
     y = np.reshape(y, (n,1)) #/ np.linalg.norm(y)
     
@@ -80,7 +84,7 @@ def get_rot_mat_from_vects (x, y):
         print 'x:', x.flatten(),'y:', y.flatten()
         print R
         print np.dot(R, R.T)
-        #raise Exception
+        raise Exception
     
     return R
 

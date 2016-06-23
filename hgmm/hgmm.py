@@ -130,8 +130,9 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
         Y = pts[n_x:,:]
         
         # Calcs to help find splitting axis
-        Xbar, Xbar_weights = get_sigma_points(m.mu, m.P) # n_x by 2*n_x + 1
+        Xbar, _ = get_sigma_points(m.mu, m.P) # n_x by 2*n_x + 1
         Xbar_augmented = np.concatenate( ( Xbar, np.ones((1,2*n_x+1)) )  )
+        assert Xbar_augmented.shape == (n_x+1, 2*n_x+1)
         # LQ factorisation
         Q, R = np.linalg.qr(Xbar_augmented.T, mode='complete') 
         Q = Q.T
@@ -139,23 +140,21 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
 
         # Propagate sigma points and get new mean, cov, and sigma points
         X_new = func(X, Y, k)
-        mu_x_new, cov_x_new = get_sigma_points_mean_cov(X_new, weights)
         
-        Xbar_new, Xbar_new_weights = get_sigma_points(mu_x_new, cov_x_new) # sigma points relating to state
+        Xbar_new = func(Xbar, np.zeros((n_v, 2*n_x+1)), k) # sigma points relating to state
         Xhat_all_new = np.dot(Xbar_new, Q.T)
         Xhat_res_new = Xhat_all_new[:,n_x+1:] # X_hat_all partition not explained by linear model
     
         # Assign stuff
-        m.mu = mu_x_new
-        m.P = cov_x_new            
+        m.mu, m.P = get_sigma_points_mean_cov(X_new, weights)
             
         # Calculate linearisation error residual e_res (mixand splitting criteria)
         zeromat = np.zeros((n_x,n_x+1))
-        e_res = np.linalg.norm( np.concatenate((zeromat, Xhat_res_new), axis=1) ) 
+        e_res = np.linalg.norm( np.concatenate((zeromat, Xhat_res_new), axis=1))
         
         print 'e_res =', e_res,
         if e_res > e_res_max:
-            print ' splitting....'
+            print ' splitting....',
             # Residual associated with each sigma point
             E_new = np.dot( np.concatenate( (zeromat, Xhat_res_new), axis=1 ),
                             Q )
@@ -176,6 +175,7 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
             # Remove current mixand and add split results
             mixture.mixands.remove(m)
             mixture.mixands.update(new_mixands)
+            print 'done'
         else:
             print ''
         
@@ -185,7 +185,7 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
         
 def f(x, v=np.array([[0]]), k=0):
     ''' Generic nonlinear discrete-time dynamics function for testing purposes'''
-    r = 10 - k/49
+    r = 10 #- k/49
     vel = np.pi*r/200 + v*np.ones_like(x[0,:])
     dt = 1
     
@@ -248,7 +248,7 @@ if __name__ == "__main__":
         print '\n timestep:', k
         print 'N =', mixture.N   
         
-        propagate(mixture, f, k, cov_v, e_res_max=7e-15, max_mixands=10)
+        propagate(mixture, f, k, cov_v, e_res_max=0.5, max_mixands=10)
 
         mixture.plot(nsteps=200)
         plt.pause(0.01)
