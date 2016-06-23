@@ -88,6 +88,14 @@ def get_sigma_points_mean_cov(pts, weights):
         
     return mean, cov
     
+def get_state_sigma_points(pts, n_x, n_v):
+    ''' Return the sigma points that correspond to the state as an array of size
+    (n_x)*(2*n_x+1) from an array *pts* containing sigma points for the augmented 
+    state/noise sigma point array (see propagate for details on how that is 
+    calcualted).'''
+    idx = np.concatenate((range(n_x+1), range(n_x+n_v+1, 2*n_x+n_v+1)))
+    assert idx.shape[0] == 1 + 2*n_x, str(idx)
+    return pts[:n_x, idx]
 
 def compare_sigma_pts(mu, cov, pts, weights):
     ''' return true if the generated pts have a mean and cov that matches the input 
@@ -119,34 +127,32 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
     
     for m in mixture.mixands.copy():
         # Create augmented mean vector and covariance matrix
-        cov = la.block_diag(m.P, cov_v)
+        cov_aug = la.block_diag(m.P, cov_v)
         
         assert m.mu.shape == (n_x,1), str(m.mu.shape)
-        mu = np.concatenate((m.mu, np.zeros((n_v,1))))
+        mu_aug = np.concatenate((m.mu, np.zeros((n_v,1))))
         
         # Find sigma points
-        pts, weights = get_sigma_points(mu, cov)
-        X = pts[:n_x,:]
-        Y = pts[n_x:,:]
+        pts, weights = get_sigma_points(mu_aug, cov_aug)
+        X = pts[:n_x,:] # values of the state for each sigma point
+        Y = pts[n_x:,:] # vaues of noise for each sigma point
+        
+        # Propagate sigma points and get new mean, cov, and sigma points
+        X_new = func(X, Y, k)        
         
         # Calcs to help find splitting axis
-        Xbar, _ = get_sigma_points(m.mu, m.P) # n_x by 2*n_x + 1
+        Xbar = get_state_sigma_points(X, n_x, n_v)
         Xbar_augmented = np.concatenate( ( Xbar, np.ones((1,2*n_x+1)) )  )
-        assert Xbar_augmented.shape == (n_x+1, 2*n_x+1)
+
         # LQ factorisation
         Q, R = np.linalg.qr(Xbar_augmented.T, mode='complete') 
         Q = Q.T
-        L = R.T
-
-        # Propagate sigma points and get new mean, cov, and sigma points
-        X_new = func(X, Y, k)
+        #L = R.T
         
-        Xbar_new = func(Xbar, np.zeros((n_v, 2*n_x+1)), k) # sigma points relating to state
+        # Variable names should match those in the paper (if this is unclear read it)
+        Xbar_new = get_state_sigma_points(X_new, n_x, n_v) # sigma points relating to state
         Xhat_all_new = np.dot(Xbar_new, Q.T)
         Xhat_res_new = Xhat_all_new[:,n_x+1:] # X_hat_all partition not explained by linear model
-    
-        # Assign stuff
-        m.mu, m.P = get_sigma_points_mean_cov(X_new, weights)
             
         # Calculate linearisation error residual e_res (mixand splitting criteria)
         zeromat = np.zeros((n_x,n_x+1))
@@ -172,12 +178,29 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
             ### Now split gaussian
             new_mixands = gaussian_splitting.split_gaussian(m, e_split)
             
+            for new_m in new_mixands:
+                # Create augmented mean vector and covariance matrix
+                cov_aug = la.block_diag(new_m.P, cov_v)
+                
+                mu_aug = np.concatenate((new_m.mu, np.zeros((n_v,1))))
+                
+                # Find sigma points
+                pts, weights = get_sigma_points(mu_aug, cov_aug)
+                X = pts[:n_x,:] # values of the state for each sigma point
+                Y = pts[n_x:,:] # vaues of noise for each sigma point
+                
+                # Propagate sigma points and get new mean, cov, and sigma points
+                X_new = func(X, Y, k)  
+                new_m.mu, new_m.P = get_sigma_points_mean_cov(X_new, weights)
+            
             # Remove current mixand and add split results
             mixture.mixands.remove(m)
             mixture.mixands.update(new_mixands)
             print 'done'
         else:
             print ''
+            # No splitting case
+            m.mu, m.P = get_sigma_points_mean_cov(X_new, weights)
         
     ### Now reduce number of mixands
     mixture.reduce_N(max_mixands)
