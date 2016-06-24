@@ -113,13 +113,76 @@ def compare_sigma_pts(mu, cov, pts, weights):
     return True
 
 
-def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
-    ''' Propagate mixands in a gaussian mixture, according to function func(x,v,k), 
-    where x (state - nxm) and v (noise - pxm) are matrices and func returns an n x m.
-    func is a discrete time dynamics function.
-    Mixand will split if linearity residual criteria e_res_max is exceeded, using a
-    precomputed split solution.
-    Mixture will reduce if number of mixands exceeds max_mixands.'''
+def propagate_discrete(mixture, func, k):
+    ''' Propagate discrete components of the state for mixands in a hybrid gaussian 
+    mixture. Mixand will split if multiple discrete states are possible
+    
+    Parameters
+    ----------
+    mixture : gmm.GaussianMixture object
+        gaussian mixture to be propagated
+
+    func : function
+        function of the form X_d_new, prob = func(m, k)
+        
+        - m is the gaussian mixand at timestep k
+        - k is the timestep, often not really needed
+        
+        - X_d_new is a list of possible new discrete states (at time k+1)
+        - prob is a list of probabilities of transition to each x_d in X_d_new
+    
+    k : integer
+        timestep
+    '''
+    
+    for m in mixture.mixands.copy():
+        
+        X_d_new, probs = func(m, k)
+        
+        if len(X_d_new) > 1:
+            print 'Splitting mixands during discrete propagation......',
+            new_mixands = []
+            
+            for x_d_new, prob in zip(X_d_new, probs):
+                new_m = m.copy()
+                new_m.x_d = x_d_new
+                new_m.w *= prob
+                new_mixands.append(new_m)
+                
+            mixture.mixands.remove(m)
+            mixture.mixands.update(new_mixands)
+            print 'Done'
+            
+        else:
+            m.x_d = X_d_new[0]
+        
+
+
+def propagate_continuous(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
+    ''' Propagate continuous components of the state for mixands in a hybrid gaussian 
+    mixture. Mixand will split if linearity residual criteria *e_res_max* is exceeded, 
+    using a precomputed split solution. Mixture will reduce if number of mixands 
+    exceeds *max_mixands*. 
+    
+    Parameters
+    ----------
+    mixture : gmm.GaussianMixture object
+        gaussian mixture to be propagated
+
+    func : function
+        function of the form X_new = fc(X, V, m, k) where X , X_new are (n_x)x(p) and V is (n_v)x(p).
+        
+        - X and V are an array of p state vectors, and m noise vectors, respectively, where n_x is the (continuous) state dimension and n_v is the noise dimension. 
+        - m is the mixand, included to provide access to the x_d, but also the ability to modify some other mixand attributes to help with other calculations (the same for all p points propagated through).
+        - k is the timestep, often not really needed
+    
+    e_res_max :
+        maximum residual error before splitting
+    
+    max_mixands : 
+        after each propagation the mixture will be reduced to this number of mixands
+        using moment preserving merges that give the lowest upper-bound kld convergence.
+    '''
     for m in mixture.mixands:
         break # get a single mixand from the set of mixands
     n_x = m.mu.shape[0] # number of states
@@ -138,7 +201,7 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
         Y = pts[n_x:,:] # vaues of noise for each sigma point
         
         # Propagate sigma points and get new mean, cov, and sigma points
-        X_new = func(X, Y, k)        
+        X_new = func(X, Y, m, k)        
         
         # Calcs to help find splitting axis
         Xbar = get_state_sigma_points(X, n_x, n_v)
@@ -190,7 +253,7 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
                 Y = pts[n_x:,:] # vaues of noise for each sigma point
                 
                 # Propagate sigma points and get new mean, cov, and sigma points
-                X_new = func(X, Y, k)  
+                X_new = func(X, Y, new_m, k)  
                 new_m.mu, new_m.P = get_sigma_points_mean_cov(X_new, weights)
             
             # Remove current mixand and add split results
@@ -204,11 +267,26 @@ def propagate(mixture, func, k, cov_v, e_res_max=0.5, max_mixands=30):
         
     ### Now reduce number of mixands
     mixture.reduce_N(max_mixands)
+  
+
+
+
+
+''' Make up some propagation functions for testing '''
+
+def f_d(m, k):
+    if k == 30:
+        return [{'x':True}, {'x':False}], [0.75, 0.25]
+    else:
+        return [m.x_d], [1.]      
         
-        
-def f(x, v=np.array([[0]]), k=0):
+def f_c(x, v, m, k=0):
     ''' Generic nonlinear discrete-time dynamics function for testing purposes'''
-    r = 10 #- k/49
+    
+    if m.x_d['x']:    
+        r = 10 #- k/49
+    else:
+        r = 5
     vel = np.pi*r/200 + v*np.ones_like(x[0,:])
     dt = 1
     
@@ -252,7 +330,7 @@ if __name__ == "__main__":
                
                
     #mixands = [gmm.Mixand(1/3, mu, P),gmm.Mixand(1/3, mu+0.1, P),gmm.Mixand(1/3, mu-0.1, P)]
-    mixands = [gmm.Mixand(1, mu, P)]
+    mixands = [gmm.Mixand(1, mu, P, x_d={'x':True})]
                
     mixture = gmm.GaussianMixture(mixands)
     print mixture
@@ -267,11 +345,12 @@ if __name__ == "__main__":
     # precompute optimal gaussian splits    
     gaussian_splitting.precompute(N=3, cov_reduction=0.3, n=n)
     
-    for k in range(150):
+    for k in range(200):
         print '\n timestep:', k
         print 'N =', mixture.N   
         
-        propagate(mixture, f, k, cov_v, e_res_max=0.5, max_mixands=10)
+        propagate_discrete(mixture, f_d, k)
+        propagate_continuous(mixture, f_c, k, cov_v, e_res_max=0.0005, max_mixands=10)
 
         mixture.plot(nsteps=200)
         plt.pause(0.01)

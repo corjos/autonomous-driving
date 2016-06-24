@@ -15,12 +15,16 @@ import itertools
 from matplotlib import pyplot as plt, cm
 
 class Mixand(object):
-    def __init__(self, w, mu, P):
+    def __init__(self, w, mu, P, x_d):
         assert mu.shape[0] == P.shape[0]
         
         self.w = w
         self.mu = np.reshape(mu, (mu.shape[0],1))
         self.P = P
+        
+        # x_d object must implement copy() and __eq__(), 
+        # a dictionary would work. See VehicleDiscreteState for another example
+        self.x_d = x_d 
                 
     @property
     def mu(self):
@@ -31,6 +35,10 @@ class Mixand(object):
         if hasattr(Mixand, '_mu'):
             assert value.shape == self.mu.shape
         self._mu = value
+        
+    def copy(self):
+        return Mixand(self.w, self.mu, self.P, self.x_d)
+                
         
 class GaussianMixture:
     def __init__(self, mixands):
@@ -46,11 +54,15 @@ class GaussianMixture:
         while self.N > m:
             best = (np.inf, None, None)
             for i, j in itertools.combinations(self.mixands, 2):
-                ub = kld_upper_bound(i, j)
-                if ub < best[0]:
-                    best = (ub, i, j)
+                if i.x_d == j.x_d: # ensure the discrete states are the same
+                    ub = kld_upper_bound(i, j)
+                    if ub < best[0]:
+                        best = (ub, i, j)
+            _, i, j = best
+            
             self.mixands.remove(i)
             self.mixands.remove(j)
+            
             self.mixands.add(moment_preserving_merge(i, j))
         assert np.allclose(np.sum(self.weights), 1), "after reduction weights don't sum to one"
         
@@ -121,7 +133,7 @@ def moment_preserving_merge(mixand_i, mixand_j):
     P_ij = w_i_ij*mixand_i.P + w_j_ij*mixand_j.P + \
                 w_i_ij*w_j_ij*np.dot(mu_diff, mu_diff.T)
     
-    return Mixand(w_ij, mu_ij, P_ij)
+    return Mixand(w_ij, mu_ij, P_ij, mixand_i.x_d)
     
 
 def kld_upper_bound(mixand_i, mixand_j):

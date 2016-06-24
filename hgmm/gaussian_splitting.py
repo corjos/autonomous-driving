@@ -31,8 +31,11 @@ def precompute(N, cov_reduction, n):
     print 'Precomputed split params: delta =', opt_spread, ', weights =', opt_weights
 
 def split_gaussian(mixand, e_split):
+    ''' Split gaussian along axis e_split, using a transformation of precomputed 
+    split result '''
     n = max(mixand.mu.shape)
     w_prev = mixand.w
+    x_d = mixand.x_d
     
     # Find transformation matrices
     T = np.linalg.cholesky(mixand.P)
@@ -49,7 +52,7 @@ def split_gaussian(mixand, e_split):
     # Transform back
     return [gmm.Mixand( opt_weights[i]*w_prev, 
             np.dot(np.dot(T,R.T), mu_star[:,i,np.newaxis]) + mixand.mu,
-            np.dot(np.dot(np.dot(np.dot(T,R.T), cov_star), R), T.T) ) for i in range(N)]
+            np.dot(np.dot(np.dot(np.dot(T,R.T), cov_star), R), T.T), x_d.copy() ) for i in range(N)]
     
     
 def get_rot_mat_from_vects (x, y):
