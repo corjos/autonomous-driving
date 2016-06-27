@@ -16,6 +16,21 @@ from matplotlib import pyplot as plt, cm
 
 class Mixand(object):
     def __init__(self, w, mu, P, x_d):
+        '''
+        Parameters
+        -----------
+        w : float [0,1]
+            weight of the mixand
+        mu : np.array with shape (n_x,1)
+            mean of mixand gaussian
+        P : np.array with shape (n_x,n_x)
+            covariance of gaussian
+        x_d : discrete hypthesis object
+            
+        
+        
+        
+        '''
         assert mu.shape[0] == P.shape[0]
         
         self.w = w
@@ -40,7 +55,7 @@ class Mixand(object):
         return Mixand(self.w, self.mu, self.P, self.x_d)
                 
         
-class GaussianMixture:
+class GaussianMixture(object):
     def __init__(self, mixands):
         self.mixands = set(mixands)
         assert np.allclose(np.sum(self.weights), 1), 'weights don\'t add to one'

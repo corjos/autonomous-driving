@@ -54,8 +54,8 @@ def get_sigma_points(mu, cov):
     
     assert np.allclose(weights.sum(), 1.0)
     
-    # expensive check, comment out if required
-    assert compare_sigma_pts(mu, cov, pts, weights)
+    # expensive check to see if 1st and 2nd moments of sigma points match gaussian
+    #assert compare_sigma_pts(mu, cov, pts, weights)
     
     return pts, weights
         
@@ -84,7 +84,8 @@ def get_sigma_points_mean_cov(pts, weights):
         # take 'covariance' about propagated 0th sigma point instead of new mean
         X0 = pts[:,0,np.newaxis] # first sigma point
         cov = np.dot(weights*(pts-X0), (pts-X0).T) 
-        la.cholesky(cov) # Check positive semi-definiteness again (should always be)
+        # Check positive semi-definiteness again (should always be)
+        la.cholesky(cov)# will throw LinAlgError if not
         
     return mean, cov
     
