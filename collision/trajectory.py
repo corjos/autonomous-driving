@@ -20,7 +20,7 @@ from matplotlib import colorbar as cb, cm
 
 
 def coll_prob(car, obst, car_pos, car_orientation, obst_mu, obst_cov, gamma_mu, 
-              gamma_sd):
+              gamma_sd, fast=False):
     ''' Transform obstacle into car-centric coordinates to use with total_coll_prob 
     function. '''
     
@@ -35,10 +35,17 @@ def coll_prob(car, obst, car_pos, car_orientation, obst_mu, obst_cov, gamma_mu,
     rel_obst_cov = np.dot(rot_mat, np.dot(obst_cov, rot_mat.T))
     rel_gamma_mu = gamma_mu - car_orientation
 
-    
-    return collision.total_coll_prob(car, obst, 
+    if fast:
+        return collision.fast_total_coll_prob(car, obst, 
                                      rel_obst_mu, rel_obst_cov, 
                                      rel_gamma_mu, gamma_sd)
+    else:
+        return collision.total_coll_prob(car, obst, 
+                                     rel_obst_mu, rel_obst_cov, 
+                                     rel_gamma_mu, gamma_sd)
+    
+    
+
 
 
 
@@ -59,6 +66,11 @@ def go():
     plt.close('all')
     fig = plt.figure()
     ax2 = fig.add_axes([0.8, 0.05, 0.05, 0.85]) 
+    
+    import matplotlib.animation as manim
+    FFMpegWriter = manim.writers['ffmpeg']
+    writer = FFMpegWriter(fps=10, metadata={'title': 'Collision Prob Test'} )       
+    
 
     ax1 = fig.add_axes([0.05, 0.05, 0.75, 0.85])   
     plt.title('Collision probability')
@@ -98,7 +110,7 @@ def go():
     # Set up vehicle instance
     vehicle_z0 = np.array([5,3,np.pi/4,0.0]).T
     v = Vehicle4d(vehicle_z0, geometry.box(-0.5,-0.5,1.0,0.5), roadmap, policy,
-                  plot_lookahead=True, cmap=cm.hot)
+                  plot_lookahead=False, cmap=cm.hot)
     
     
     # Add colorbar, make sure to specify tick locations to match desired ticklabels
@@ -107,9 +119,11 @@ def go():
     
     # Simulate
     coll_probs = []
-    #try:
-    for i in range(100):    
+    
+    #with writer.saving(fig, 'Trajectory Collision Test.mp4', 200):
 
+    for i in range(200):    
+    
         p_coll = coll_prob(v._p, obstacle, 
                                     v._z[0:2], v._z[2], 
                                     obst_mu, obst_cov, 
@@ -117,12 +131,17 @@ def go():
         coll_probs.append(p_coll)
         
         v.plot(plt.gca(), prob=p_coll)
-
+    
     
         #plt.title(str(i))
+        #writer.grab_frame()
+        print i
         plt.pause(0.001)
         
-        v.move(0.4)
+        v.move(0.2)
+    
+    plt.figure()
+    plt.plot(coll_probs)
     
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ plt.close('all')
 cov_reduction = 0.3
 N = 3
 
-opt_spread, opt_weights, isd = 0,0,0
+opt_spread, opt_weights, isd = None, None, None
 
 def precompute(N, cov_reduction, n):
     ''' Precompute split parameters for splitting into N n-dimensional mixands, with
@@ -33,6 +33,10 @@ def precompute(N, cov_reduction, n):
 def split_gaussian(mixand, e_split):
     ''' Split gaussian along axis e_split, using a transformation of precomputed 
     split result '''
+    
+    if opt_weights is None:
+        raise Exception('No precomputed split available')    
+    
     n = max(mixand.mu.shape)
     w_prev = mixand.w
     x_d = mixand.x_d
@@ -48,6 +52,8 @@ def split_gaussian(mixand, e_split):
         mu_star[0,i] = (i - (N-1)/2)*opt_spread  
     cov_star = np.eye(n)
     cov_star[0,0] = cov_reduction
+    
+    
         
     # Transform back
     return [gmm.Mixand( opt_weights[i]*w_prev, 

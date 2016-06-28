@@ -18,7 +18,18 @@ from myplot.covariance_ellipse import plot_cov_ellipse
 import numpy as np
 import math
 from minkowski import minkowski_sum
+import contextlib
+import sys
 
+class DummyFile(object):
+    def write(self, x): pass
+
+@contextlib.contextmanager
+def nostdout():
+    save_stdout = sys.stdout
+    sys.stdout = DummyFile()
+    yield
+    sys.stdout = save_stdout
             
 obstacle_bounds = []
 obstacle_orientations = []
@@ -27,23 +38,29 @@ obstacle_orientations = []
 def obstacle_bound(shape, orientations):
     ''' return the convex hull of a shape rotated about (0,0) by the angles in the
      orientations sequence. '''
+    with nostdout():
+        shapes = []
+        for angle in orientations:
+            shapes.append(affinity.rotate(shape, angle, origin=(0,0), use_radians=True))
     
-    shapes = []
-    for angle in orientations:
-        shapes.append(affinity.rotate(shape, angle, origin=(0,0), use_radians=True))
-
-    union = ops.cascaded_union(shapes)
-    bound = union.convex_hull
+        union = ops.cascaded_union(shapes)
+        bound = union.convex_hull.convex_hull # apparently sometimes one convex_hull isn't enough
+        # TODO: check for convexity before retrying convex hull operation
+        # sometimes convex-hull returns valid non-convex polygons well fuck
+        if not bound.is_valid: # in case it randomly shits out
+            # For debug:        
+            
     
-    if not bound.is_valid: # in case it randomly shits out
-        # For debug:        
-        #obstacle_bounds.append(bound)
-        #obstacle_orientations.append(orientations)
-
-        # clean shape
-        bound = bound.buffer(0.0).convex_hull
-        
-    return bound
+            # clean shape
+            bound = bound.buffer(0.0).convex_hull.convex_hull
+            
+            if not bound.is_valid:
+                raise Exception('why doesnt this work')
+            
+        obstacle_bounds.append(bound)
+        obstacle_orientations.append(orientations)        
+            
+        return bound
     
 def min_bounding_box(p):
     ''' return the minimum-area bounding box (any orientation) of a convex polygon p.'''
@@ -155,9 +172,7 @@ def max_extent(p):
 def circ_coll_prob(car, obst, obst_mu, obst_cov):   
     ''' estimate collision probability between car and obst using circular 
     over-approximation '''
-    
-    
-    
+     
     radius = max_extent(car) + max_extent(obst) # radius of circular CB
     
     W = np.linalg.inv( np.linalg.cholesky(obst_cov) ) # diagonalize covariance
@@ -169,7 +184,7 @@ def circ_coll_prob(car, obst, obst_mu, obst_cov):
     extents = S*radius # [major axis length, minor axis length] # of cb_rw
     # bounding box of cb_rw
     minx, miny, maxx, maxy = -extents[0], -extents[1], extents[0], extents[1]
-    bbox_r = geom.box(minx, miny, maxx, maxy)
+    #bbox_r = geom.box(minx, miny, maxx, maxy)
 
     # Calculate probability
     cdf = lambda z: 0.5*(1 + math.erf(z/np.sqrt(2)))
@@ -177,7 +192,7 @@ def circ_coll_prob(car, obst, obst_mu, obst_cov):
     mu_rw = np.dot(RW, np.reshape(obst_mu, (2,1)) ).flatten()
     
     return ( cdf(maxx-mu_rw[0]) - cdf(minx-mu_rw[0]) ) * ( 
-                 cdf(maxy-mu_rw[1]) - cdf(miny-mu_rw[1]) ) , mu_rw, bbox_r
+                 cdf(maxy-mu_rw[1]) - cdf(miny-mu_rw[1]) ) #, mu_rw, bbox_r
     
     
 
@@ -241,6 +256,25 @@ def total_coll_prob(car, obst,
     
     return p_coll.sum() + (1-delta)*p_circ
    
+   
+def fast_total_coll_prob(car, obst, 
+                         obst_mu, obst_cov, 
+                         gamma_mu, gamma_sd,
+                         delta=0.99, n_intervals=5, circ_thresh=0.05):  
+    '''
+    Check collision first using circular over-approximation, if the collision 
+    probability calculated using the approximation is above *circ_thresh*, then 
+    use total_coll_prob function for a better approximation.
+    '''
+    p_coll_circ = circ_coll_prob(car, obst, obst_mu, obst_cov) 
+
+    if p_coll_circ > circ_thresh:
+        return total_coll_prob(car, obst, 
+                               obst_mu, obst_cov, 
+                               gamma_mu, gamma_sd, delta, n_intervals)
+    else:
+        return p_coll_circ
+            
     
 if __name__ == "__main__":
     # Test it

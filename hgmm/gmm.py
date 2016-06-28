@@ -13,6 +13,7 @@ import numpy as np
 from myplot import covariance_ellipse as cvre, covariance_heatmap as cvrh
 import itertools
 from matplotlib import pyplot as plt, cm
+import warnings
 
 class Mixand(object):
     def __init__(self, w, mu, P, x_d):
@@ -79,7 +80,8 @@ class GaussianMixture(object):
             self.mixands.remove(j)
             
             self.mixands.add(moment_preserving_merge(i, j))
-        assert np.allclose(np.sum(self.weights), 1), "after reduction weights don't sum to one"
+            if not np.allclose(np.sum(self.weights), 1):
+                warnings.warn("after reduction weights don't sum to one")
         
     @property    
     def N(self):
@@ -98,7 +100,7 @@ class GaussianMixture(object):
         
     def copy(self):
         ''' Return a shallow copy of the mixture'''
-        return GaussianMixture(self.mixands.copy())
+        return GaussianMixture({m.copy() for m in self.mixands})
         
     def plot_ellipse(self, **kwargs):
         ''' plot first two dimensions of the mixture'''
