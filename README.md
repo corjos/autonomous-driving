@@ -2,7 +2,7 @@
 Code for use in my autonomous driving research. Consists of largely-independent python packages
 making heavy use of the numpy, scipy, and matplotlib libaries. 
 
-If you have any questions about or problems with the code please contact me jwc292@cornell.edu
+If you have any questions about or problems with the code please contact me: jwc292 {} cornell {} edu
 
 ## Packages
 * **hgmm**: 
